@@ -1,131 +1,123 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import calendar # Для отримання назв місяців
 
-print("=== 🚴 Аналіз велодоріжок Монреаля (2009 рік) ===")
+plt.style.use('ggplot')
+plt.rcParams['figure.figsize'] = (15, 6)
 
-# --- 1. Завантаження даних ---
+# ============================================================
+# 1. Завантаження та створення датафрейму
+# ============================================================
+df = pd.read_csv('comptage_velo_2009.csv',
+                 sep=',',
+                 encoding='latin1',
+                 parse_dates=['date'])
 
-# Використовуємо ім'я файлу, яке ви вказали
-file_name = "comptagevelo2009.csv"
+print("=" * 60)
+print("ПЕРШІ 5 РЯДКІВ ДАТАФРЕЙМУ:")
+print("=" * 60)
+print(df.head())
 
-try:
-    # Читаємо локальний файл
-    # parse_dates=['Date'] -> намагаємося перетворити стовпець 'Date' на дату
-    # dayfirst=True -> вказуємо, що формат дати DD/MM/YYYY (європейський)
-    df = pd.read_csv(file_name, parse_dates=['Date'], dayfirst=True)
-    
-    print(f"✅ Дані з файлу '{file_name}' успішно завантажено.\n")
+print("\n" + "=" * 60)
+print("ІНФОРМАЦІЯ ПРО ДАТАФРЕЙМ:")
+print("=" * 60)
+print(df.info())
 
-    # --- 2. Перевірка основних характеристик ---
-    print("--- 2.1. Перші 5 рядків (df.head()) ---")
-    print(df.head())
-    
-    print("\n--- 2.2. Інформація про DataFrame (df.info()) ---")
-    # df.info() покаже, чи є пропуски, і чи правильно розпізнано 'Date'
-    df.info()
+print("\n" + "=" * 60)
+print("СТАТИСТИЧНИЙ ОПИС:")
+print("=" * 60)
+print(df.describe())
 
-    print("\n--- 2.3. Описова статистика (df.describe()) ---")
-    # df.describe() рахує статистику (середнє, мін/макс) для числових стовпців
-    print(df.describe())
-    print("\n" + "="*50 + "\n")
+# ============================================================
+# 2. Загальна кількість велосипедистів за рік на всіх доріжках
+# ============================================================
+total_all = df['nb_passage'].sum()
+print("\n" + "=" * 60)
+print("ЗАГАЛЬНА КІЛЬКІСТЬ ВЕЛОСИПЕДИСТІВ (всі доріжки):")
+print("=" * 60)
+print(f"  Всього: {int(total_all):,} велосипедистів")
 
-    # --- Підготовка даних ---
-    # Встановлюємо 'Date' як індекс (це зручно для аналізу часових даних)
-    df = df.set_index('Date')
-    
-    # Заповнюємо пропущені значення (NaN) нулями, щоб суми рахувалися коректно
-    df = df.fillna(0)
-    
-    # Отримуємо список стовпців лічильників (всі стовпці)
-    counter_columns = df.columns
-    
-    # Перетворюємо всі лічильники на цілі числа (int)
-    df[counter_columns] = df[counter_columns].astype(int)
+# ============================================================
+# 3. Загальна кількість велосипедистів на кожній доріжці
+# ============================================================
+total_per_path = df.groupby('id_compteur')['nb_passage'].sum()
+print("\n" + "=" * 60)
+print("КІЛЬКІСТЬ ВЕЛОСИПЕДИСТІВ НА КОЖНІЙ ДОРІЖЦІ:")
+print("=" * 60)
+for path, count in total_per_path.items():
+    print(f"  Доріжка {path}: {int(count):,} велосипедистів")
 
-    # --- 3. Загальна кількість велосипедистів за рік (усі доріжки) ---
-    # .sum() спочатку рахує суму по кожному стовпцю, 
-    # а другий .sum() додає ці суми разом.
-    total_all_cyclists = df[counter_columns].sum().sum()
-    print("--- 3. Загальна кількість велосипедистів за рік (усі доріжки) ---")
-    # : ,.0f -> форматує число з комами-роздільниками (напр., 1,234,567)
-    print(f"Всього за 2009 рік на всіх доріжках: {total_all_cyclists:,.0f} велосипедистів\n")
+# ============================================================
+# 4. Найпопулярніший місяць для трьох велодоріжок
+# ============================================================
+months_ua = {
+    1: 'Січень',   2: 'Лютий',    3: 'Березень',
+    4: 'Квітень',  5: 'Травень',  6: 'Червень',
+    7: 'Липень',   8: 'Серпень',  9: 'Вересень',
+    10: 'Жовтень', 11: 'Листопад', 12: 'Грудень'
+}
 
-    # --- 4. Загальна кількість велосипедистів за рік (кожна доріжка) ---
-    total_per_path = df[counter_columns].sum()
-    print("--- 4. Загальна кількість за рік (на кожній доріжці) ---")
-    print(total_per_path.to_string(float_format='{:,.0f}'.format))
-    print("\n" + "="*50 + "\n")
+# Додаємо колонку місяць
+df['month'] = df['date'].dt.month
 
-    # --- 5. Найпопулярніший місяць (для 3 обраних доріжок) ---
-    print("--- 5. Найпопулярніший місяць (для 3 обраних доріжок) ---")
-    
-    # Створюємо копію, щоб не змінювати оригінальний df
-    df_monthly = df.copy()
-    
-    # Створюємо новий стовпець 'Month' з номером місяця (1-12)
-    df_monthly['Month'] = df_monthly.index.month
-    
-    # Групуємо дані по місяцю і сумуємо всі поїздки для кожного місяця
-    monthly_counts = df_monthly.groupby('Month')[counter_columns].sum()
-    
-    # Змінюємо індекси (1, 2, 3...) на назви місяців ("January", "February"...)
-    monthly_counts.index = [calendar.month_name[i] for i in monthly_counts.index]
-    
-    # Обираємо 3 доріжки для аналізу (наприклад, перші 3)
-    paths_to_check = counter_columns[0:3] 
-    
-    for path in paths_to_check:
-        # .idxmax() знаходить індекс (назву місяця) з максимальним значенням
-        most_popular_month = monthly_counts[path].idxmax()
-        count = monthly_counts[path].max()
-        print(f"  ➡️  Доріжка '{path}': Найпопулярніший місяць = {most_popular_month} ({count:,.0f} велосипедистів)")
-    
-    print("\n" + "="*50 + "\n")
+# Вибираємо три доріжки
+selected_paths = total_per_path.index[:3].tolist()
 
-    # --- 6. Графік завантаженості однієї велодоріжки по місяцях ---
-    print("--- 6. Побудова графіка завантаженості... ---")
-    
-    # Обираємо першу доріжку для побудови графіка
-    path_to_plot = counter_columns[0]
-    data_to_plot = monthly_counts[path_to_plot]
-    
-    # Створюємо "полотно" для малювання
-    plt.figure(figsize=(12, 7))
-    
-    # Малюємо лінійний графік з маркерами
-    data_to_plot.plot(kind='line', marker='o', linestyle='--')
-    
-    # 
-    
-    # Налаштування графіка
-    plt.title(f"Завантаженість велодоріжки '{path_to_plot}' по місяцях (2009)", fontsize=16)
-    plt.xlabel("Місяць", fontsize=12)
-    plt.ylabel("Кількість велосипедистів", fontsize=12)
-    plt.grid(True, linestyle=':', alpha=0.7) # Додаємо сітку
-    
-    # Форматуємо вісь Y, щоб числа були з комами (напр., 10,000)
-    ax = plt.gca() # Get Current Axis
-    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-    
-    plt.xticks(rotation=45) # Повертаємо назви місяців
-    plt.tight_layout() # Автоматично налаштовує відступи
-    
-    # Зберігаємо графік у файл
-    plot_filename = f"bike_usage_{path_to_plot.replace(' ', '_')}_2009.png"
-    plt.savefig(plot_filename)
-    print(f"✅ Графік збережено у файл: {plot_filename}")
-    
-    # Показуємо графік у вікні
-    plt.show()
+print("\n" + "=" * 60)
+print("НАЙПОПУЛЯРНІШИЙ МІСЯЦЬ ДЛЯ ТРЬОХ ВЕЛОДОРІЖОК:")
+print("=" * 60)
 
-except FileNotFoundError:
-    print(f"ПОМИЛКА: Файл '{file_name}' не знайдено.")
-    print("Переконайтеся, що файл знаходиться у тій самій папці, що й ваш .py скрипт,")
-    print("і що ім'я файлу написано правильно.")
-except pd.errors.EmptyDataError:
-    print(f"ПОМИЛКА: Файл '{file_name}' порожній.")
-except Exception as e:
-    print(f"Сталася неочікувана помилка: {e}")
-    print("Можливо, файл пошкоджений або має неправильний формат.")
+for path in selected_paths:
+    df_path = df[df['id_compteur'] == path]
+    monthly = df_path.groupby('month')['nb_passage'].sum()
+    best_month_num = monthly.idxmax()
+    best_month_name = months_ua[best_month_num]
+    best_count = int(monthly.max())
+    print(f"  Доріжка {path}:")
+    print(f"    Найпопулярніший місяць: {best_month_name} "
+          f"({best_count:,} велосипедистів)")
+
+# ============================================================
+# 5. Графік завантаженості однієї велодоріжки по місяцям
+# ============================================================
+chosen_path = selected_paths[0]
+df_chosen = df[df['id_compteur'] == chosen_path]
+monthly_data = df_chosen.groupby('month')['nb_passage'].sum()
+
+month_labels = [months_ua[m] for m in monthly_data.index]
+
+fig, ax = plt.subplots(figsize=(15, 6))
+
+bars = ax.bar(
+    range(len(monthly_data)),
+    monthly_data.values,
+    color='steelblue',
+    edgecolor='navy',
+    alpha=0.8
+)
+
+# Підписи значень над стовпчиками
+for bar, value in zip(bars, monthly_data.values):
+    ax.text(
+        bar.get_x() + bar.get_width() / 2,
+        bar.get_height() + max(monthly_data.values) * 0.01,
+        f'{int(value):,}',
+        ha='center',
+        va='bottom',
+        fontsize=9,
+        fontweight='bold'
+    )
+
+ax.set_xticks(range(len(monthly_data)))
+ax.set_xticklabels(month_labels, rotation=30, ha='right', fontsize=11)
+ax.set_xlabel('Місяць', fontsize=13)
+ax.set_ylabel('Кількість велосипедистів', fontsize=13)
+ax.set_title(
+    f'Завантаженість велодоріжки {chosen_path} по місяцям (2009 рік)',
+    fontsize=14,
+    fontweight='bold'
+)
+
+plt.tight_layout()
+plt.savefig('bike_path_2009.png', dpi=150, bbox_inches='tight')
+plt.show()
+print("\nГрафік збережено: bike_path_2009.png")
